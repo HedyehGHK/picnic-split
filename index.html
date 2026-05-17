@@ -570,5 +570,33 @@
 
   document.querySelectorAll('input').forEach(i => i.addEventListener('input', updateTotals));
 </script>
+<script type="module">
+
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
+
+import {
+  getFirestore,
+  collection,
+  addDoc,
+  getDocs
+} from "https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js";
+
+
+const firebaseConfig = {
+  apiKey: "AIzaSyAqWPHvAH3qBlh951ReUmePrs6rtiJdodg",
+  authDomain: "picnic-split.firebaseapp.com",
+  projectId: "picnic-split",
+  storageBucket: "picnic-split.firebasestorage.app",
+  messagingSenderId: "864168077822",
+  appId: "1:864168077822:web:6987dabe1ba2c97ab538af"
+};
+
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+console.log("Firebase connected!");
+
+</script>
 </body>
 </html>
