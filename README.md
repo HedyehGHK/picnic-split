@@ -23,7 +23,7 @@ https://picnic-split.vercel.app/
 ### 1. Clone the repo
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/picnic-split.git
+git clone https://github.com/HedyehGHK/picnic-split.git
 cd picnic-split
 ```
 
