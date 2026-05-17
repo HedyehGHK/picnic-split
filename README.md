@@ -2,7 +2,7 @@
 
 A lightweight, real-time bill-splitting web app built for three friends — no accounts, no app install, just open the link and start adding items.
 
-![Picnic Split preview](https://picnic-split.vercel.app)
+https://picnic-split.vercel.app/
 
 ## ✨ Features
 
