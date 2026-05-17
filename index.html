@@ -472,67 +472,153 @@
   </div>
 </div>
 
-<script>
-  const people = ['mina', 'hedyeh', 'hannaneh'];
-  const labels = { mina: 'Mina', hedyeh: 'Hedyeh', hannaneh: 'Hannaneh' };
-  const trClass = { mina: 'tr-mina', hedyeh: 'tr-hedyeh', hannaneh: 'tr-hannaneh' };
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
-  function fmt(n) {
-    return Math.round(n).toLocaleString('en-US') + ' $';
-  }
+  const firebaseConfig = {
+    apiKey: "AIzaSyAqWPHvAH3qBlh951ReUmePrs6rtiJdodg",
+    authDomain: "picnic-split.firebaseapp.com",
+    projectId: "picnic-split",
+    storageBucket: "picnic-split.firebasestorage.app",
+    messagingSenderId: "864168077822",
+    appId: "1:864168077822:web:6987dabe1ba2c97ab538af"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+  const SESSION_DOC = doc(db, "sessions", "picnic2025");
+
+  const people = ["mina", "hedyeh", "hannaneh"];
+  const labels = { mina: "Mina", hedyeh: "Hedyeh", hannaneh: "Hannaneh" };
+  const trClass = { mina: "tr-mina", hedyeh: "tr-hedyeh", hannaneh: "tr-hannaneh" };
+
+  let isSyncing = false;
+  let saveTimer = null;
+
+  function fmt(n) { return Math.round(n).toLocaleString("en-US") + " $"; }
 
   function getTotal(person) {
     let sum = 0;
-    document.querySelectorAll(`#rows-${person} tr`).forEach(r => {
-      sum += parseFloat(r.querySelectorAll('input')[1].value) || 0;
+    document.querySelectorAll("#rows-" + person + " tr").forEach(r => {
+      sum += parseFloat(r.querySelectorAll("input")[1].value) || 0;
     });
     return sum;
   }
 
   function updateTotals() {
     people.forEach(p => {
-      document.getElementById(`total-${p}`).textContent = Math.round(getTotal(p)).toLocaleString('en-US') + ' $';
+      document.getElementById("total-" + p).textContent =
+        Math.round(getTotal(p)).toLocaleString("en-US") + " $";
     });
   }
 
-  function addRow(person) {
-    const tbody = document.getElementById(`rows-${person}`);
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td><input type="text" placeholder="Item name"></td>
-      <td><input type="number" placeholder="0" min="0"></td>
-      <td><button class="btn-remove" onclick="removeRow(this)" aria-label="Remove">×</button></td>`;
-    tr.querySelectorAll('input').forEach(i => i.addEventListener('input', updateTotals));
-    tbody.appendChild(tr);
+  function collectData() {
+    const data = {};
+    people.forEach(p => {
+      data[p] = [];
+      document.querySelectorAll("#rows-" + p + " tr").forEach(r => {
+        const inputs = r.querySelectorAll("input");
+        data[p].push({ name: inputs[0].value || "", price: parseFloat(inputs[1].value) || 0 });
+      });
+    });
+    return data;
   }
 
-  function removeRow(btn) {
-    const tbody = btn.closest('tr').parentElement;
-    if (tbody.querySelectorAll('tr').length > 1) {
-      btn.closest('tr').remove();
-      updateTotals();
+  function renderData(data) {
+    isSyncing = true;
+    people.forEach(p => {
+      const tbody = document.getElementById("rows-" + p);
+      const rows = (data[p] && data[p].length) ? data[p] : [{ name: "", price: 0 }];
+      tbody.innerHTML = "";
+      rows.forEach(item => {
+        const tr = document.createElement("tr");
+        const safeName = item.name.replace(/"/g, "&quot;");
+        tr.innerHTML =
+          "<td><input type=\"text\" placeholder=\"Item name\" value=\"" + safeName + "\"></td>" +
+          "<td><input type=\"number\" placeholder=\"0\" min=\"0\" value=\"" + (item.price || "") + "\"></td>" +
+          "<td><button class=\"btn-remove\" onclick=\"window.removeRow(this)\" aria-label=\"Remove\">×</button></td>";
+        tr.querySelectorAll("input").forEach(i => i.addEventListener("input", onInput));
+        tbody.appendChild(tr);
+      });
+    });
+    updateTotals();
+    isSyncing = false;
+  }
+
+  function showStatus(msg, color) {
+    let el = document.getElementById("sync-status");
+    if (!el) {
+      el = document.createElement("div");
+      el.id = "sync-status";
+      Object.assign(el.style, {
+        position: "fixed", bottom: "16px", right: "16px",
+        background: "rgba(253,246,236,0.92)", border: "1px solid rgba(201,168,76,0.3)",
+        borderRadius: "8px", padding: "8px 14px", fontSize: "13px",
+        fontFamily: "DM Sans, sans-serif", backdropFilter: "blur(8px)",
+        transition: "opacity 0.4s", zIndex: "999"
+      });
+      document.body.appendChild(el);
     }
+    el.textContent = msg; el.style.color = color; el.style.opacity = "1";
+    clearTimeout(el._timer);
+    el._timer = setTimeout(() => { el.style.opacity = "0"; }, 2500);
   }
 
-  function calculate() {
+  async function saveData() {
+    if (isSyncing) return;
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(async () => {
+      try {
+        await setDoc(SESSION_DOC, { data: collectData(), updatedAt: new Date() });
+        showStatus("✓ Saved", "#7a9e7e");
+      } catch(e) {
+        showStatus("⚠ Save failed", "#c4745a");
+        console.error(e);
+      }
+    }, 800);
+  }
+
+  function onInput() { updateTotals(); saveData(); }
+
+  onSnapshot(SESSION_DOC, snap => {
+    if (snap.exists()) renderData(snap.data().data);
+  });
+
+  window.addRow = function(person) {
+    const tbody = document.getElementById("rows-" + person);
+    const tr = document.createElement("tr");
+    tr.innerHTML =
+      "<td><input type=\"text\" placeholder=\"Item name\"></td>" +
+      "<td><input type=\"number\" placeholder=\"0\" min=\"0\"></td>" +
+      "<td><button class=\"btn-remove\" onclick=\"window.removeRow(this)\" aria-label=\"Remove\">×</button></td>";
+    tr.querySelectorAll("input").forEach(i => i.addEventListener("input", onInput));
+    tbody.appendChild(tr);
+    saveData();
+  };
+
+  window.removeRow = function(btn) {
+    const tbody = btn.closest("tr").parentElement;
+    if (tbody.querySelectorAll("tr").length > 1) {
+      btn.closest("tr").remove();
+      updateTotals(); saveData();
+    }
+  };
+
+  window.calculate = function() {
     const totals = {};
     people.forEach(p => { totals[p] = getTotal(p); });
     const grand = Object.values(totals).reduce((a, b) => a + b, 0);
     const share = grand / 3;
-
-    document.getElementById('res-total').textContent = fmt(grand);
-    document.getElementById('res-share').textContent = fmt(share);
-    document.getElementById('res-summary').classList.add('show');
-
+    document.getElementById("res-total").textContent = fmt(grand);
+    document.getElementById("res-share").textContent = fmt(share);
+    document.getElementById("res-summary").classList.add("show");
     const balance = {};
     people.forEach(p => { balance[p] = totals[p] - share; });
-
     const debtors   = people.filter(p => balance[p] < -0.5).map(p => ({ name: p, amount: -balance[p] }));
     const creditors = people.filter(p => balance[p] >  0.5).map(p => ({ name: p, amount:  balance[p] }));
     const settled   = people.filter(p => Math.abs(balance[p]) <= 0.5);
-
-    const d = debtors.map(x => ({...x}));
-    const c = creditors.map(x => ({...x}));
+    const d = debtors.map(x => ({...x})), c = creditors.map(x => ({...x}));
     const txns = [];
     let i = 0, j = 0;
     while (i < d.length && j < c.length) {
@@ -542,61 +628,27 @@
       if (d[i].amount < 0.5) i++;
       if (c[j].amount < 0.5) j++;
     }
-
-    const list = document.getElementById('transfer-list');
-    list.innerHTML = '';
-
+    const list = document.getElementById("transfer-list");
+    list.innerHTML = "";
     if (txns.length === 0) {
-      list.innerHTML = '<div class="transfer-row tr-settled"><span class="settled-text">All even — no payments needed! 🎉</span></div>';
+      list.innerHTML = "<div class=\"transfer-row tr-settled\"><span class=\"settled-text\">All even — no payments needed! 🎉</span></div>";
     } else {
       txns.forEach(t => {
-        const div = document.createElement('div');
-        div.className = `transfer-row ${trClass[t.from]}`;
-        div.innerHTML = `<span class="transfer-text"><strong>${labels[t.from]}</strong> → <strong>${labels[t.to]}</strong></span><span class="transfer-amount">${t.amount.toLocaleString('en-US')} $</span>`;
+        const div = document.createElement("div");
+        div.className = "transfer-row " + trClass[t.from];
+        div.innerHTML = "<span class=\"transfer-text\"><strong>" + labels[t.from] + "</strong> → <strong>" + labels[t.to] + "</strong></span><span class=\"transfer-amount\">" + t.amount.toLocaleString("en-US") + " $</span>";
         list.appendChild(div);
       });
     }
-
     settled.forEach(p => {
-      const div = document.createElement('div');
-      div.className = 'transfer-row tr-settled';
-      div.innerHTML = `<span class="settled-text">${labels[p]} is all settled</span><span class="check">✓</span>`;
+      const div = document.createElement("div");
+      div.className = "transfer-row tr-settled";
+      div.innerHTML = "<span class=\"settled-text\">" + labels[p] + " is all settled</span><span class=\"check\">✓</span>";
       list.appendChild(div);
     });
-
-    document.getElementById('res-transfers').classList.add('show');
-    document.getElementById('res-summary').scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }
-
-  document.querySelectorAll('input').forEach(i => i.addEventListener('input', updateTotals));
-</script>
-<script type="module">
-
-import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
-
-import {
-  getFirestore,
-  collection,
-  addDoc,
-  getDocs
-} from "https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js";
-
-
-const firebaseConfig = {
-  apiKey: "AIzaSyAqWPHvAH3qBlh951ReUmePrs6rtiJdodg",
-  authDomain: "picnic-split.firebaseapp.com",
-  projectId: "picnic-split",
-  storageBucket: "picnic-split.firebasestorage.app",
-  messagingSenderId: "864168077822",
-  appId: "1:864168077822:web:6987dabe1ba2c97ab538af"
-};
-
-
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
-
-console.log("Firebase connected!");
-
+    document.getElementById("res-transfers").classList.add("show");
+    document.getElementById("res-summary").scrollIntoView({ behavior: "smooth", block: "start" });
+  };
 </script>
 </body>
 </html>
